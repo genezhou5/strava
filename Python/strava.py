@@ -17,8 +17,18 @@ from plotly import express as px
 from plotly import graph_objects as go
 import plotly.io as pio # to render plots in browser
 
+import dash
+import dash_core_components as dcc
+import dash_bootstrap_components as dbc
+import dash_html_components as html
+from dash.dependencies import Input, Output
+
+
 chdir('C:\\Users\\gzhou\\Documents\\Strava\\Data')
 pio.renderers.default='browser'
+
+app = dash.Dash()
+app = dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 #############
 # Functions #
@@ -83,6 +93,8 @@ activities = activities_import.rename(columns = {
     'Perceived Exertion':'perceived_exertion'
     }
     )
+# remove distance_km bc it's not a number somehow
+activities = activities.drop(['distance_km'], axis=1)
 
 activities['activity_date'] = pd.to_datetime(activities['activity_date_str'],
                                              format='%b %d, %Y, %I:%M:%S %p')
@@ -93,6 +105,7 @@ activities['activity_week'] = activities['activity_date'] - activities['activity
 activities['activity_week'] = pd.to_datetime(activities['activity_week']).dt.date
 activities['elapsed_time_min'] = activities['elapsed_time_1']/60
 activities['distance_mi'] = activities['distance_m'] * 0.00062137
+activities['distance_km'] = activities['distance_m']/1000
 
 #df['First_day'] = df['Date'] - df['Date'].dt.weekday * np.timedelta64(1, 'D')
 
@@ -123,11 +136,13 @@ activities = activities[
      ]
     ]
 
-
 runs = activities[(activities['activity_type']=='Run')
                   & (activities['activity_date'].dt.date > datetime.date(year=2022,month=2,day=20))]
 
-runs['pace'] = runs['elapsed_time_min']/runs['distance_mi']
+# "A value is trying to be set on a copy of a slice from a DataFrame..."
+#runs['pace'] = runs['elapsed_time_min']/runs['distance_mi']
+
+runs = runs.assign(pace = runs['elapsed_time_min']/runs['distance_mi'])
 
 runs_gb = runs[['activity_week',
                     'distance_km',
@@ -139,8 +154,8 @@ runs_gb = runs[['activity_week',
 runs_weekly1 = runs_gb.agg(['sum', 'mean']).reset_index()
 
 runs_weekly1.columns = ['activity_week',
-                        #'sum_distance_km',
-                        #'avg_distance_km',
+                        'sum_distance_km',
+                        'avg_distance_km',
                         'sum_distance_mi',
                         'avg_distance_mi',
                         'sum_elapsed_time_min',
@@ -167,8 +182,8 @@ runs_wt.columns = ['activity_week', 'avg_pace_wt', 'std_pace_wt']
 
 runs_weekly = pd.merge(runs_weekly1, runs_wt, how='left', on=['activity_week'])
 
-run_mi_plt = px.line(runs_weekly, x='activity_week', y='sum_distance_mi')
-run_mi_plt.update_layout(
+runs_mi_plt = px.line(runs_weekly, x='activity_week', y='sum_distance_mi')
+runs_mi_plt.update_layout(
     title={
         'text': "Weekly Mileage",
         'y':0.95,
@@ -230,6 +245,38 @@ swims_dist_plt.update_layout(
     xaxis_title='Date',
     yaxis_title='Meters Swum')
 
+"""
+app.layout = html.Div(children=[
+    dcc.Graph(id='runs_mi_plt', figure=runs_mi_plt),
+    dcc.Graph(id='runs_pace_plt', figure=runs_pace_plt),
+    dcc.Graph(id='swims_dist_plt', figure=swims_dist_plt)
+    ])
+"""
+
+app = dash.Dash()
+# `Dash` doesn't work
+#app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+
+app.layout = dbc.Container([
+    dbc.Row([
+        dbc.Col(html.Div(children=[dcc.Graph(id='runs_mi_plt',
+                                             figure=runs_mi_plt)]),
+                width='auto'),
+        dbc.Col(html.Div(children=[dcc.Graph(id='runs_pace_plt',
+                                             figure=runs_pace_plt)]),
+                width='auto')
+        ]),
+    dbc.Row([
+        dbc.Col(html.Div(children=[dcc.Graph(id='swims_dist_plt',
+                                             figure=swims_dist_plt)]),
+                width='auto')
+        ])
+    ])
+
+if __name__ == '__main__':
+    app.run_server(debug=True, use_reloader=False)
+
+#@app.callback(Output('graphid', 'figure'))
 
 ############################
 # TEST CODE PLEASE IGNORE
