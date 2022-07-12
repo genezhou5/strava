@@ -17,18 +17,12 @@ from plotly import express as px
 from plotly import graph_objects as go
 import plotly.io as pio # to render plots in browser
 
-import dash
-import dash_core_components as dcc
+from dash import Dash, dcc, html #, Input, Output
 import dash_bootstrap_components as dbc
-import dash_html_components as html
-from dash.dependencies import Input, Output
 
 
 chdir('C:\\Users\\gzhou\\Documents\\Strava\\Data')
 pio.renderers.default='browser'
-
-app = dash.Dash()
-app = dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 #############
 # Functions #
@@ -166,8 +160,8 @@ runs_weekly1.columns = ['activity_week',
                         'avg_perceived_exertion']
 
 runs_weekly1 = runs_weekly1[['activity_week',
-                            #'sum_distance_km',
-                            #'avg_distance_km',
+                            'sum_distance_km',
+                            'avg_distance_km',
                             'sum_distance_mi',
                             'avg_distance_mi',
                             'sum_elapsed_time_min',
@@ -218,6 +212,22 @@ runs_pace_plt.update_layout(
     xaxis_title='Date',
     yaxis_title='Pace')
 
+runs_effort_plt = go.Figure()
+runs_effort_plt.add_trace(go.Scatter(x=runs_weekly['activity_week'],
+                                     y=runs_weekly['avg_perceived_exertion'],
+                                     line=dict(color='rgba(51,51,255,1)'),
+                                     showlegend=False))
+
+runs_effort_plt.update_layout(
+    title={
+        'text': "Effort",
+        'y':0.95,
+        'x':0.5,
+        'xanchor': 'center',
+        'yanchor': 'top'},
+    xaxis_title='Date',
+    yaxis_title='Perceived Effort')
+
 swims = activities[(activities['activity_type']=='Swim')
                    & (activities['activity_date'].dt.date > datetime.date(year=2022,month=2,day=20))]
 
@@ -246,6 +256,8 @@ swims_dist_plt.update_layout(
     yaxis_title='Meters Swum')
 
 """
+app = dash.Dash()
+
 app.layout = html.Div(children=[
     dcc.Graph(id='runs_mi_plt', figure=runs_mi_plt),
     dcc.Graph(id='runs_pace_plt', figure=runs_pace_plt),
@@ -253,23 +265,26 @@ app.layout = html.Div(children=[
     ])
 """
 
-app = dash.Dash()
+#app = dash.Dash()
 # `Dash` doesn't work
-#app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 app.layout = dbc.Container([
     dbc.Row([
         dbc.Col(html.Div(children=[dcc.Graph(id='runs_mi_plt',
-                                             figure=runs_mi_plt)]),
-                width='auto'),
-        dbc.Col(html.Div(children=[dcc.Graph(id='runs_pace_plt',
-                                             figure=runs_pace_plt)]),
-                width='auto')
+                                             figure=runs_mi_plt)])
+                ),
+        dbc.Col(html.Div(children=[dcc.Graph(id='runs_effort_plt',
+                                             figure=runs_effort_plt)])
+                )
         ]),
     dbc.Row([
+        dbc.Col(html.Div(children=[dcc.Graph(id='runs_pace_plt',
+                                             figure=runs_pace_plt)])
+                ),
         dbc.Col(html.Div(children=[dcc.Graph(id='swims_dist_plt',
-                                             figure=swims_dist_plt)]),
-                width='auto')
+                                             figure=swims_dist_plt)])
+                )
         ])
     ])
 
