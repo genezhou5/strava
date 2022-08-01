@@ -130,6 +130,174 @@ activities = activities[
      ]
     ]
 
+activities = activities[activities['activity_date'].dt.date > datetime.date(year=2022,month=2,day=20)]
+
+#activities['pace'] = activities['activity_type'].map({'Run': activities['elapsed_time_min']/activities['distance_mi'],
+#                                                     'Swim': activities['elapsed_time_min']/activities['distance_m']*100})
+
+"""
+Creating generalized df
+Idea is to create functions to make charts from this df
+Make the code more modular
+"""
+
+cond_list = [activities['activity_type'].str.contains('Run'),
+            activities['activity_type'].str.contains('Swim')]
+
+choice_list = [activities['elapsed_time_min']/activities['distance_mi'],
+               activities['elapsed_time_min']/activities['distance_m']*100]
+
+activities = activities.assign(pace = np.select(cond_list, choice_list, 0))
+
+activities_gb = activities[['activity_week',
+                               'activity_type',
+                               'distance_m',
+                               'distance_km',
+                               'distance_mi',
+                               'elapsed_time_min',
+                               'pace',
+                               'perceived_exertion']].groupby(['activity_week',
+                                                               'activity_type'])
+
+activities_weekly = activities_gb.agg(['sum', 'mean']).reset_index()
+
+activities_weekly.columns = ['activity_week',
+                             'activity_type',
+                             'sum_distance_m',
+                             'avg_distance_m',
+                             'sum_distance_km',
+                             'avg_distance_km',
+                             'sum_distance_mi',
+                             'avg_distance_mi',
+                             'sum_elapsed_time_min',
+                             'avg_elapsed_time_min',
+                             'sum_pace',
+                             'avg_pace',
+                             'sum_perceived_exertion',
+                             'avg_perceived_exertion']
+
+activities_weekly = activities_weekly[['activity_week',
+                                       'activity_type',
+                                       'sum_distance_m',
+                                       'avg_distance_m',
+                                       'sum_distance_km',
+                                       'avg_distance_km',
+                                       'sum_distance_mi',
+                                       'avg_distance_mi',
+                                       'sum_elapsed_time_min',
+                                       'avg_elapsed_time_min',
+                                       'sum_pace',
+                                       'avg_pace',
+                                       'sum_perceived_exertion',
+                                       'avg_perceived_exertion']]
+
+def make_line_plt(data, activity_type, metric):
+    
+    # Steps:
+    # 1) Make dataset based on inputs
+    # 2) Make plot
+    """
+    activity_type: Run, Swim, Bike, All
+    metric: dist, distance, pace, effort
+    """
+
+    activity_type = activity_type.capitalize()
+    metric = metric.lower()
+    
+    if metric == 'effort':
+        metric = 'avg_perceived_exertion'
+        plt_title = 'Perceived Effort'
+        yaxis = 'Perceived Effort'
+    elif activity_type == 'Run':
+        if metric in ('dist', 'distance'):
+            metric = 'sum_distance_mi'
+            plt_title = 'Mileage'
+            yaxis = 'Miles'
+        elif metric in ('pace'):
+            metric = 'avg_pace'
+            plt_title = 'Avg Run Pace'
+            yaxis = 'Pace (min/mi)'
+    elif activity_type == 'Swim':
+        if metric in ('dist', 'distance'):
+            metric = 'sum_distance_m'
+            plt_title = 'Swim Distance'
+            yaxis = 'Distance (m)'
+        elif metric in ('pace'):
+            metric = 'avg_pace'
+            plt_title = 'Avg Swim Pace'
+            yaxis = 'Pace (min/100)'
+
+
+    data = data[data['activity_type'] == activity_type]
+    #* Update this to be able to specify day/week/month
+    data['period'] = data['activity_date'] - data['activity_date'].dt.weekday * np.timedelta64(1, 'D')
+    data['period'] = pd.to_datetime(data['period']).dt.date
+    
+    data_gb = data[['period',
+                    'activity_type',
+                    'distance_m',
+                    'distance_km',
+                    'distance_mi',
+                    'elapsed_time_min',
+                    'pace',
+                    'perceived_exertion']].groupby(['period','activity_type'])
+    
+    data_period = data_gb.agg(['sum', 'mean']).reset_index()
+    
+    data_period.columns = ['period',
+                           'activity_type',
+                           'sum_distance_m',
+                           'avg_distance_m',
+                           'sum_distance_km',
+                           'avg_distance_km',
+                           'sum_distance_mi',
+                           'avg_distance_mi',
+                           'sum_elapsed_time_min',
+                           'avg_elapsed_time_min',
+                           'sum_pace',
+                           'avg_pace',
+                           'sum_perceived_exertion',
+                           'avg_perceived_exertion']
+
+    data_period = data_period[['period',
+                               'activity_type',
+                               'sum_distance_m',
+                               'avg_distance_m',
+                               'sum_distance_km',
+                               'avg_distance_km',
+                               'sum_distance_mi',
+                               'avg_distance_mi',
+                               'sum_elapsed_time_min',
+                               'avg_elapsed_time_min',
+                               'sum_pace',
+                               'avg_pace',
+                               'sum_perceived_exertion',
+                               'avg_perceived_exertion']]
+    
+    plt = go.Figure()
+    plt.add_trace(go.Scatter(x=data_period['period'],
+                             y=data_period[metric],
+                             line=dict(color='rgba(51,51,255,1)'),
+                             showlegend=False))
+    #* Add traces for toggling error bands
+    
+    plt.update_layout(
+        title={
+            'text':plt_title,
+            'y':0.95,
+            'x':0.5,
+            'xanchor':'center',
+            'yanchor':'top'},
+        xaxis_title='Date',
+        yaxis_title=yaxis)
+    
+    return(plt)
+
+plt_test = make_line_plt(activities, 'swim', 'pace')
+
+plt_test
+
+
 runs = activities[(activities['activity_type']=='Run')
                   & (activities['activity_date'].dt.date > datetime.date(year=2022,month=2,day=20))]
 
@@ -269,6 +437,13 @@ app.layout = html.Div(children=[
 # `Dash` doesn't work
 app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
+"""
+app.layout = html.Div(children=[
+    dcc.Graph(id='runs_mi_plt', figure=runs_mi_plt),
+    dcc.Graph(id='runs_pace_plt', figure=runs_pace_plt)
+    ])
+"""
+
 app.layout = dbc.Container([
     dbc.Row([
         dbc.Col(html.Div(children=[dcc.Graph(id='runs_mi_plt',
@@ -287,6 +462,7 @@ app.layout = dbc.Container([
                 )
         ])
     ])
+
 
 if __name__ == '__main__':
     app.run_server(debug=True, use_reloader=False)
